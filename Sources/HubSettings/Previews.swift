@@ -271,15 +271,17 @@ private struct IslandPreviewStage: View {
         let corner = model.number(app, open ? "openCorner" : "peekCorner")
 
         Stage(list: list,
-              hint: "Тяни за края острова. Вкладки перетаскиваются, вниз - убрать.") {
+              hint: "Тяни за края острова. Вкладки перетаскиваются, вниз - убрать. В свёрнутом нажми на ухо.") {
             GeometryReader { proxy in
                 // Превью в натуральную величину; уменьшается, только если раскрытый остров шире сцены.
                 let scale = min(1, (proxy.size.width - 48) / (openSize.width + 28))
                 ZStack(alignment: .top) {
                     MenuBar(height: notch.height)
-                    IslandPreview(settings: model.settingsData(app), open: open) { tabs in
+                    IslandPreview(settings: model.settingsData(app), open: open, onTabsChange: { tabs in
                         list?.save(tabs)
-                    }
+                    }, onEdit: { key, value in
+                        withMotion(Motion.spring) { model.set(app, key, value) }
+                    })
                     if hovering || dragging {
                         handles(size: size, corner: corner, scale: scale)
                             .transition(.opacity)
