@@ -3,248 +3,232 @@ import Carbon.HIToolbox
 import SuiteKit
 import SwiftUI
 
-/// Одно поле схемы: строка с названием слева и контролом справа.
-/// Список (`list`) занимает несколько строк: по строке на вариант.
-struct FieldView: View {
+/// Строка формы для одного поля схемы - на нативных контролах, как в Системных настройках:
+/// переключатель, выбор, ползунок со значением справа, цвет, сочетание клавиш, список с перетаскиванием.
+/// Любое изменение сразу пишется в файл настроек приложения; кнопки «Сохранить» нет.
+struct FieldRow: View {
     let model: HubModel
     let app: String
     let field: SuiteSchema.Field
-    var flash = false
+    let copy: FieldCopy
 
     var body: some View {
         switch field.kind {
         case .toggle:
-            row { toggle }
+            Toggle(isOn: Binding(
+                get: { model.value(app, field.key)?.bool ?? false },
+                set: { on in withMotion { model.set(app, field.key, .bool(on)) } }
+            )) { label }
+            .toggleStyle(.switch)
+            .controlSize(ControlMetrics.switchSize)
         case .number:
-            row(scrub: true) { NumberControl(field: field, value: binding(number: 0)) }
+            LabeledContent {
+                NumberControl(field: field, format: copy.value, value: Binding(
+                    get: { model.value(app, field.key)?.number ?? field.min ?? 0 },
+                    set: { model.set(app, field.key, .number($0)) }
+                ))
+            } label: { label }
         case .choice:
-            row(stacked: (field.options ?? []).count <= 3) { choice }
+            ChoiceControl(field: field, selection: Binding(
+                get: { model.value(app, field.key)?.string ?? "" },
+                set: { value in withMotion { model.set(app, field.key, .string(value)) } }
+            )) { label }
         case .hotkey:
-            row {
+            LabeledContent {
                 HotKeyRecorder(
+                    title: copy.title,
                     keyCode: Int(model.value(app, field.key)?.number ?? 0),
                     modifiers: model.value(app, field.modifiersKey ?? "")?.strings ?? []
                 ) { code, modifiers in
                     model.set(app, field.key, .number(Double(code)))
                     if let key = field.modifiersKey { model.set(app, key, .array(modifiers.map { .string($0) })) }
                 }
-            }
+            } label: { label }
         case .color:
-            row(stacked: true) {
+            LabeledContent {
                 ColorControl(options: field.options ?? [], value: Binding(
                     get: { model.value(app, field.key)?.string ?? "" },
-                    set: { hex in withMotion(Motion.base) { model.set(app, field.key, .string(hex)) } }
+                    set: { hex in withMotion { model.set(app, field.key, .string(hex)) } }
                 ))
-            }
+            } label: { label }
         case .list:
-            OrderedList(model: model, app: app, field: field, last: true)
-                .padding(.horizontal, Space.insetMd)
+            OrderedList(model: model, app: app, field: field)
+        case .text:
+            LabeledContent {
+                TextControl(placeholder: field.unit ?? "", value: Binding(
+                    get: { model.value(app, field.key)?.string ?? "" },
+                    set: { model.set(app, field.key, .string($0)) }
+                ))
+            } label: { label }
         }
     }
 
-    private func row<Control: View>(scrub: Bool = false, stacked: Bool = false,
-                                    @ViewBuilder _ control: @escaping () -> Control) -> some View {
-        InspectorRow(model: model, app: app, field: field, flash: flash, scrub: scrub ? binding(number: 0) : nil,
-                     stacked: stacked, control: control)
-    }
-
-    private var toggle: some View {
-        // Подпись несёт сама строка; у переключателя она только для VoiceOver.
-        Toggle("", isOn: Binding(
-            get: { model.value(app, field.key)?.bool ?? false },
-            set: { on in withMotion(Motion.base) { model.set(app, field.key, .bool(on)) } }
-        ))
-        .toggleStyle(NLSwitchStyle())
-        .accessibilityLabel(field.title)
-    }
-
+    /// Подпись и, если нужно, строка пояснения под ней: форма сама делает вторую строку серой и мелкой.
     @ViewBuilder
-    private var choice: some View {
-        let options = (field.options ?? []).map { (value: $0.value, title: $0.title) }
-        let selection = Binding(
-            get: { model.value(app, field.key)?.string ?? "" },
-            set: { value in withMotion { model.set(app, field.key, .string(value)) } }
-        )
-        if options.count <= 3 {
-            Segmented(selection: selection, options: options)
-        } else {
-            NLSelect(selection: selection, options: options)
+    private var label: some View {
+        Text(copy.title)
+        if let help = copy.help {
+            Text(help)
         }
-    }
-
-    private func binding(number fallback: Double) -> Binding<Double> {
-        Binding(
-            get: { model.value(app, field.key)?.number ?? fallback },
-            set: { model.set(app, field.key, .number($0)) }
-        )
     }
 }
 
 // MARK: - число
 
-/// Ползунок и поле, в которое можно вписать точное число. Файл пишется на каждом шаге,
-/// так что приложение меняется прямо во время перетаскивания.
+/// Ползунок и значение справа. Файл пишется на каждом шаге, так что приложение меняется прямо во время перетаскивания.
 private struct NumberControl: View {
     let field: SuiteSchema.Field
+    let format: FieldCopy.ValueFormat
     @Binding var value: Double
-    @State private var text = ""
-    @FocusState private var editing: Bool
 
     var body: some View {
         let low = field.min ?? 0
         let high = max(field.max ?? 1, low)
         let step = field.step ?? 1
-        HStack(spacing: Space.s2) {
-            Slider(value: Binding(get: { min(max(value, low), high) }, set: { value = round($0 / step) * step }),
-                   in: low...high)
-                .controlSize(.mini)
-                .tint(NL.accent)
-                .frame(width: 96)
-            HStack(spacing: 2) {
-                TextField("", text: $text)
-                    .textFieldStyle(.plain)
-                    .multilineTextAlignment(.trailing)
-                    .focused($editing)
-                    .onSubmit { commit(low, high, step) }
-                if let unit = field.unit {
-                    Text(unit).foregroundStyle(NL.textTertiary)
+        let slider = Binding(get: { min(max(value, low), high) },
+                             set: { value = min(max(($0 / step).rounded() * step, low), high) })
+        HStack(spacing: Spacing.md) {
+            switch format {
+            case .ends(let start, let end):
+                Slider(value: slider, in: low...high) {
+                    Text(field.title)
+                } minimumValueLabel: {
+                    Text(start)
+                } maximumValueLabel: {
+                    Text(end)
                 }
-            }
-            .nlType(.labelSm)
-            .monospacedDigit()
-            .foregroundStyle(NL.textPrimary)
-            .padding(.horizontal, Space.s1_5)
-            .frame(width: 62, height: 24)
-            .background(NL.subtle, in: RoundedRectangle(cornerRadius: Radius.xs + 1, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: Radius.xs + 1, style: .continuous)
-                    .strokeBorder(editing ? NL.borderFocus : .clear, lineWidth: 1)
+                .labelsHidden()
+                .frame(width: ControlMetrics.sliderWidth + ControlMetrics.sliderValueWidth)
+            case .plain, .percent:
+                Slider(value: slider, in: low...high)
+                    .labelsHidden()
+                    .frame(width: ControlMetrics.sliderWidth)
+                Text(text(slider.wrappedValue, step: step))
+                    .font(TextStyle.value)
+                    .foregroundStyle(.secondary)
+                    .frame(width: ControlMetrics.sliderValueWidth, alignment: .trailing)
+                    .contentTransition(.numericText(value: slider.wrappedValue))
             }
         }
-        .onAppear { text = Self.format(value, step: step) }
-        .onChange(of: value) { if !editing { text = Self.format(value, step: step) } }
-        .onChange(of: editing) { _, now in if !now { commit(low, high, step) } }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(text(value, step: step))
     }
 
-    private func commit(_ low: Double, _ high: Double, _ step: Double) {
-        if let typed = Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) {
-            value = min(max((typed / step).rounded() * step, low), high)
+    private func text(_ value: Double, step: Double) -> String {
+        if case .percent = format {
+            return "\(Int((value * 100).rounded())) %"
         }
-        text = Self.format(value, step: step)
-    }
-
-    static func format(_ value: Double, step: Double) -> String {
         let digits = step >= 1 ? 0 : step >= 0.1 ? 1 : 2
-        let formatter = NumberFormatter()
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = digits
-        formatter.usesGroupingSeparator = false
-        return formatter.string(from: value as NSNumber) ?? "\(value)"
+        let number = value.formatted(.number.precision(.fractionLength(0...digits)).grouping(.never))
+        guard let unit = Self.unit(field.unit) else { return number }
+        return unit.spaced ? "\(number) \(unit.text)" : "\(number)\(unit.text)"
+    }
+
+    /// Единицы из схемы - по-русски и без технических сокращений.
+    private static func unit(_ raw: String?) -> (text: String, spaced: Bool)? {
+        switch raw {
+        case nil, "": nil
+        case "pt": ("пт", true)
+        case "px": ("пикс.", true)
+        case "%": ("%", true)
+        case "×", "x": ("×", false)
+        case "°": ("°", false)
+        case let other?: (other, true)
+        }
     }
 }
 
-/// Строка инспектора: название слева, контрол справа. У изменённой настройки слева синяя точка - нажми, чтобы
-/// вернуть стандартное значение. За название числа можно тянуть влево-вправо, как в Figma. Пояснение - в подсказке.
-private struct InspectorRow<Control: View>: View {
-    let model: HubModel
-    let app: String
-    let field: SuiteSchema.Field
-    let flash: Bool
-    let scrub: Binding<Double>?
-    /// Широкий контрол (сегменты, образцы цвета) встаёт под названием, а не справа от него.
-    var stacked = false
-    @ViewBuilder let control: () -> Control
-    @State private var scrubStart: Double?
-    @State private var hover = false
+// MARK: - текст
+
+/// Поле ввода. Пишется в файл по Return или когда уходите из поля - не на каждую букву,
+/// чтобы приложение не искало город «М», «Мо», «Мос»…
+private struct TextControl: View {
+    let placeholder: String
+    @Binding var value: String
+    @State private var text = ""
+    @FocusState private var focused: Bool
 
     var body: some View {
-        let changed = !model.isDefault(app, field)
-        let layout = stacked
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Space.s1_5))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: Space.s2))
-        layout {
-            Text(field.title)
-                .nlType(.bodySm)
-                .foregroundStyle(NL.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .gesture(scrubGesture)
-                .onHover { inside in
-                    guard scrub != nil else { return }
-                    if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-                }
-            control()
-        }
-        .padding(.horizontal, Space.insetMd)
-        .padding(.vertical, stacked ? Space.s2 : 0)
-        .frame(minHeight: 36)
-        .background(flash ? NL.accentSubtle : hover ? NL.hover.opacity(0.5) : .clear)
-        .overlay(alignment: .leading) {
-            if changed {
-                Button { withMotion(Motion.spring) { model.reset(app, field) } } label: {
-                    Circle().fill(NL.accent).frame(width: 6, height: 6)
-                        .frame(width: Space.insetMd, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Изменено. Нажми, чтобы вернуть стандартное значение.")
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .onHover { hover = $0 }
-        .help(field.help ?? "")
-        .contextMenu {
-            Button("Вернуть стандартное значение") { withMotion(Motion.spring) { model.reset(app, field) } }
-                .disabled(!changed)
-        }
-        .animation(Motion.base, value: changed)
+        TextField("", text: $text, prompt: Text(placeholder))
+            .textFieldStyle(.roundedBorder)
+            .labelsHidden()
+            .frame(width: ControlMetrics.textFieldWidth)
+            .focused($focused)
+            .onSubmit(commit)
+            .onAppear { text = value }
+            .onChange(of: value) { if !focused { text = value } }
+            .onChange(of: focused) { _, now in if !now { commit() } }
     }
 
-    private var scrubGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { drag in
-                guard let scrub else { return }
-                if scrubStart == nil { scrubStart = scrub.wrappedValue }
-                let step = field.step ?? 1
-                // 3 pt движения - один шаг; с Shift - в десять раз точнее не нужно, шаг и так мелкий.
-                let value = (scrubStart ?? 0) + (drag.translation.width / 3).rounded() * step
-                scrub.wrappedValue = min(max(value, field.min ?? -.infinity), field.max ?? .infinity)
+    private func commit() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed != value { value = trimmed }
+    }
+}
+
+// MARK: - выбор
+
+/// Два-три коротких варианта - сегменты, больше - всплывающее меню, как в Системных настройках.
+private struct ChoiceControl<Label: View>: View {
+    let field: SuiteSchema.Field
+    @Binding var selection: String
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        let options = field.options ?? []
+        let compact = options.count <= 3 && options.map(\.title.count).reduce(0, +) <= 24
+        let picker = Picker(selection: $selection) {
+            ForEach(options, id: \.value) { option in
+                if let symbol = option.symbol, !compact {
+                    SwiftUI.Label(option.title, systemImage: symbol).tag(option.value)
+                } else {
+                    Text(option.title).tag(option.value)
+                }
             }
-            .onEnded { _ in scrubStart = nil }
+        } label: { label() }
+        if compact {
+            picker.pickerStyle(.segmented).fixedSize()
+        } else {
+            picker.pickerStyle(.menu).fixedSize()
+        }
     }
 }
 
 // MARK: - цвет
 
-/// Готовые образцы (системные цвета Apple) и свой цвет из системной палитры. Значение - строка «#RRGGBB».
+/// Образцы кружками, как выбор акцента в Системных настройках, и свой цвет из системной палитры.
+/// Значение - строка «#RRGGBB».
 private struct ColorControl: View {
     let options: [SuiteSchema.Field.Option]
     @Binding var value: String
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: ControlMetrics.swatchSpacing) {
             ForEach(options, id: \.value) { option in
                 let selected = option.value.caseInsensitiveCompare(value) == .orderedSame
                 Button { value = option.value } label: {
                     Circle()
                         .fill(Self.color(option.value))
-                        .frame(width: 18, height: 18)
-                        .overlay { Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1) }
-                        .padding(3)
-                        .overlay { Circle().strokeBorder(selected ? NL.textPrimary : .clear, lineWidth: 2) }
-                        .scaleEffect(selected ? 1 : 0.92)
+                        .frame(width: ControlMetrics.swatch, height: ControlMetrics.swatch)
+                        .overlay { Circle().strokeBorder(Palette.tileStroke, lineWidth: 1) }
+                        .padding(ControlMetrics.swatchRing + 1)
+                        .overlay {
+                            Circle().strokeBorder(selected ? Palette.selectedSwatchRing : .clear,
+                                                  lineWidth: ControlMetrics.swatchRing)
+                        }
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .help(option.title)
+                .accessibilityLabel(option.title)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
             ColorPicker("Свой цвет", selection: Binding(
                 get: { Self.color(value) },
                 set: { value = Self.hex($0) }
             ), supportsOpacity: false)
-                .labelsHidden()
-                .help("Свой цвет")
+            .labelsHidden()
+            .help("Свой цвет")
         }
     }
 
@@ -264,69 +248,66 @@ private struct ColorControl: View {
 
 // MARK: - упорядоченный список
 
-/// Включённые варианты сверху: строки можно перетаскивать за любое место. Выключенные ниже, в порядке схемы.
+/// Включённые варианты сверху - их можно перетаскивать за любое место. Выключенные ниже, в порядке схемы.
+/// Переключатель справа убирает и возвращает пункт.
 private struct OrderedList: View {
     let model: HubModel
     let app: String
     let field: SuiteSchema.Field
-    let last: Bool
 
     var body: some View {
         let options = field.options ?? []
         let enabled = (model.value(app, field.key)?.strings ?? []).filter { id in options.contains { $0.value == id } }
         let disabled = options.filter { !enabled.contains($0.value) }
         VStack(spacing: 0) {
-            ReorderStrip(axis: .vertical, items: enabled, length: Size.rowHeight, spacing: 0,
+            ReorderStrip(axis: .vertical, items: enabled, length: ControlMetrics.listRowHeight, spacing: 0,
                          removeDistance: nil, onChange: save) { id, state in
                 if let option = options.first(where: { $0.value == id }) {
-                    row(option, on: true, state: state, last: last && disabled.isEmpty && id == enabled.last) {
+                    row(option, on: true, dragging: state.dragging,
+                        divider: !(disabled.isEmpty && id == enabled.last)) {
                         save(enabled.filter { $0 != id })
                     }
                 }
             }
             ForEach(Array(disabled.enumerated()), id: \.element.value) { index, option in
-                row(option, on: false, state: .init(), last: last && index == disabled.count - 1) {
+                row(option, on: false, dragging: false, divider: index < disabled.count - 1) {
                     save(enabled + [option.value])
                 }
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, -Space.s2)
     }
 
-    private func row(_ option: SuiteSchema.Field.Option, on: Bool, state: ReorderItemState, last: Bool,
+    private func row(_ option: SuiteSchema.Field.Option, on: Bool, dragging: Bool, divider: Bool,
                      toggle: @escaping () -> Void) -> some View {
-        HStack(spacing: Space.s3) {
+        HStack(spacing: Spacing.md) {
             Image(systemName: "line.3.horizontal")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(on ? NL.iconTertiary : .clear)
-                .frame(width: Size.iconSm)
+                .foregroundStyle(on ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.clear))
+                .frame(width: ControlMetrics.dragHandleWidth)
+                .accessibilityHidden(true)
             if let symbol = option.symbol {
                 Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(on ? NL.iconPrimary : NL.iconTertiary)
-                    .frame(width: Size.iconMd)
+                    .foregroundStyle(on ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                    .frame(width: ControlMetrics.listSymbolWidth)
             }
-            Text(option.title)
-                .nlType(.bodySm)
-                .foregroundStyle(on ? NL.textPrimary : NL.textSecondary)
-            Spacer(minLength: 0)
-            Toggle("", isOn: Binding(get: { on }, set: { _ in toggle() }))
-                .toggleStyle(NLSwitchStyle())
-                .accessibilityLabel(option.title)
+            Toggle(option.title, isOn: Binding(get: { on }, set: { _ in toggle() }))
+                .toggleStyle(.switch)
+                .controlSize(ControlMetrics.switchSize)
+                .foregroundStyle(on ? .primary : .secondary)
         }
-        .padding(.horizontal, Space.s2)
-        .frame(height: Size.rowHeight)
+        .frame(height: ControlMetrics.listRowHeight)
         .background {
-            RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                .fill(state.dragging ? NL.control : .clear)
-                .shadow(color: .black.opacity(state.dragging ? 0.25 : 0), radius: 10, y: 4)
+            if dragging {
+                RoundedRectangle(cornerRadius: ControlMetrics.previewRadius, style: .continuous)
+                    .fill(Palette.controlBackground)
+                    .shadow(color: Palette.dragShadow, radius: 8, y: 3)
+                    .padding(.horizontal, -Spacing.md)
+            }
         }
         .overlay(alignment: .bottom) {
-            if !last, !state.dragging { NL.borderSubtle.frame(height: 1).padding(.horizontal, Space.s2) }
+            if divider, !dragging { Divider().padding(.leading, ControlMetrics.dragHandleWidth + Spacing.md) }
         }
-        .scaleEffect(state.dragging ? 1.02 : 1)
-        .animation(Motion.spring, value: state)
+        .animation(Motion.spring, value: dragging)
         .contentShape(Rectangle())
     }
 
@@ -337,9 +318,11 @@ private struct OrderedList: View {
 
 // MARK: - горячая клавиша
 
-/// Кнопка с текущим сочетанием; нажали - ждёт клавиш. Нужен хотя бы один из ⌃⌥⌘,
-/// иначе клавиша перехватывала бы обычный набор текста. Esc - отмена. Крестик убирает сочетание.
+/// Поле сочетания клавиш, как в «Клавиатура → Сочетания клавиш»: нажали - ждёт клавиш (с фокусной рамкой),
+/// Esc - отмена, крестик внутри поля убирает сочетание. Нужен хотя бы один из ⌃⌥⌘, иначе клавиша
+/// перехватывала бы обычный набор текста.
 private struct HotKeyRecorder: View {
+    let title: String
     let keyCode: Int
     let modifiers: [String]
     let save: (Int, [String]) -> Void
@@ -347,44 +330,49 @@ private struct HotKeyRecorder: View {
     @State private var monitor: Any?
 
     var body: some View {
-        HStack(spacing: Space.s1) {
-            if capturing {
-                Button("Нажмите сочетание…") { stop() }
-                    .nlButton(.secondary)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                            .strokeBorder(NL.borderFocus, lineWidth: 1)
-                    }
-                    .help("Сочетание с ⌃, ⌥ или ⌘. Esc - отмена.")
-            } else {
-                Button { start() } label: {
-                    if modifiers.isEmpty {
-                        Text("Задать").foregroundStyle(NL.textSecondary)
-                    } else {
-                        // Каждая клавиша - отдельным колпачком.
-                        HStack(spacing: 3) {
-                            ForEach(KeyNames.keys(keyCode: keyCode, modifiers: modifiers), id: \.self) { key in
-                                Text(key)
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(NL.textPrimary)
-                                    .padding(.horizontal, 5)
-                                    .frame(minWidth: 20, minHeight: 20)
-                                    .background(NL.subtle, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            }
-                        }
-                        .padding(.horizontal, -4)
-                    }
+        let shape = RoundedRectangle(cornerRadius: ControlMetrics.hotkeyRadius, style: .continuous)
+        HStack(spacing: Spacing.xs) {
+            Group {
+                if capturing {
+                    Text("Нажмите сочетание")
+                        .foregroundStyle(Palette.placeholder)
+                } else if modifiers.isEmpty {
+                    Text("Не задано")
+                        .foregroundStyle(Palette.placeholder)
+                } else {
+                    Text(KeyNames.shortcut(keyCode: keyCode, modifiers: modifiers))
+                        .font(TextStyle.keyCap)
                 }
-                .nlButton(.secondary)
-                .help("Нажмите, чтобы задать сочетание")
             }
-            Button { save(keyCode, []) } label: {
-                Label("Убрать", systemImage: "xmark")
+            .frame(maxWidth: .infinity)
+            if !modifiers.isEmpty || capturing {
+                Button {
+                    if capturing { stop() } else { save(keyCode, []) }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help(capturing ? "Отменить" : "Убрать сочетание")
+                .accessibilityLabel(capturing ? "Отменить" : "Убрать сочетание")
             }
-            .nlIconButton(.md)
-            .help("Убрать сочетание")
-            .disabled(modifiers.isEmpty || capturing)
         }
+        .padding(.horizontal, Spacing.sm)
+        .frame(minWidth: ControlMetrics.hotkeyMinWidth, minHeight: ControlMetrics.hotkeyHeight)
+        .fixedSize()
+        .background(Palette.controlBackground, in: shape)
+        .overlay { shape.strokeBorder(Palette.separator, lineWidth: 1) }
+        .overlay {
+            if capturing { shape.strokeBorder(Palette.accent, lineWidth: 2).padding(-1) }
+        }
+        .contentShape(shape)
+        .onTapGesture { capturing ? stop() : start() }
+        .help("Нажмите и введите сочетание с ⌃, ⌥ или ⌘. Esc - отмена.")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .accessibilityValue(modifiers.isEmpty ? "Не задано" : KeyNames.shortcut(keyCode: keyCode, modifiers: modifiers))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { capturing ? stop() : start() }
         .onDisappear { stop() }
     }
 

@@ -6,14 +6,16 @@ import SwiftUI
 struct HubApp: App {
     @NSApplicationDelegateAdaptor private var delegate: HubDelegate
     @State private var model = HubModel()
+    @State private var apps = AppMonitor()
 
     var body: some Scene {
         Window("Hub Settings", id: "main") {
-            HubView(model: model)
-                .frame(minWidth: 1060, minHeight: 620)
+            HubView(model: model, apps: apps)
+                .frame(minWidth: WindowMetrics.minSize.width, minHeight: WindowMetrics.minSize.height)
+                .background(WindowFrameAutosave(name: WindowMetrics.frameAutosaveName))
         }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 1240, height: 800)
+        .defaultSize(WindowMetrics.defaultSize)
+        .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .undoRedo) {
@@ -30,4 +32,21 @@ struct HubApp: App {
 
 final class HubDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool { true }
+}
+
+/// Окно помнит свой размер и место между запусками (последний модуль помнит `HubModel.selection`).
+private struct WindowFrameAutosave: NSViewRepresentable {
+    let name: String
+
+    func makeNSView(context _: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.setFrameUsingName(name)
+            window.setFrameAutosaveName(name)
+        }
+        return view
+    }
+
+    func updateNSView(_: NSView, context _: Context) {}
 }

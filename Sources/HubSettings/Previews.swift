@@ -75,27 +75,39 @@ private struct Stage<Content: View, Corner: View>: View {
             .clipped()
             .overlay(alignment: .bottomLeading) {
                 corner()
-                    .padding(Space.s3)
+                    .padding(Spacing.lg)
                     .environment(\.colorScheme, .dark)
             }
             if let list {
                 Tray(list: list, hint: hint)
             }
         }
-        .background(NL.surface)
+        .background(Color.clear)
     }
 }
 
 /// Обои в духе macOS: мягкие цветные пятна системных оттенков.
+/// Пятна - радиальные градиенты, а не размытые круги: размытие радиусом 90 пересчитывалось на каждом кадре
+/// прокрутки формы, и окно заметно тормозило. Градиент рисуется один раз.
 private struct Wallpaper: View {
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.05, green: 0.10, blue: 0.32), Color(red: 0.22, green: 0.10, blue: 0.42)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            Circle().fill(NL.accent.opacity(0.75)).frame(width: 380).blur(radius: 90).offset(x: -190, y: 90)
-            Circle().fill(NL.pink.opacity(0.55)).frame(width: 300).blur(radius: 90).offset(x: 220, y: 130)
-            Circle().fill(NL.teal.opacity(0.45)).frame(width: 240).blur(radius: 80).offset(x: 60, y: -110)
-        }
+        // Пятна - поверх фона, а не рядом с ним в стопке: их размер не должен распирать сцену.
+        LinearGradient(colors: [PreviewStyle.wallpaperTop, PreviewStyle.wallpaperBottom],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+            .overlay {
+                ZStack {
+                    glow(PreviewStyle.glowA, radius: 280).offset(x: -190, y: 90)
+                    glow(PreviewStyle.glowB, radius: 240).offset(x: 220, y: 130)
+                    glow(PreviewStyle.glowC, radius: 200).offset(x: 60, y: -110)
+                }
+            }
+            .clipped()
+            .drawingGroup()
+    }
+
+    private func glow(_ color: Color, radius: CGFloat) -> some View {
+        RadialGradient(colors: [color, color.opacity(0)], center: .center, startRadius: 0, endRadius: radius)
+            .frame(width: radius * 2, height: radius * 2)
     }
 }
 
@@ -105,37 +117,37 @@ private struct Tray: View {
     let hint: String
 
     var body: some View {
-        HStack(spacing: Space.s2) {
+        HStack(spacing: Spacing.md) {
             if list.available.isEmpty {
                 Image(systemName: "hand.draw")
                     .font(.system(size: 12))
-                    .foregroundStyle(NL.iconTertiary)
+                    .foregroundStyle(Color.secondary)
                 Text(hint)
-                    .nlType(.caption)
-                    .foregroundStyle(NL.textTertiary)
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
                     .transition(.opacity)
             } else {
                 Text("Добавить")
-                    .nlType(.caption)
-                    .foregroundStyle(NL.textTertiary)
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
                 // Вариантов бывает много: лоток прокручивается вбок, подписи не сжимаются.
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Space.s2) {
+                    HStack(spacing: Spacing.md) {
                         ForEach(list.available, id: \.value) { option in
                             TrayChip(option: option) {
-                                withAnimation(Motion.spring) { list.save(list.enabled + [option.value]) }
+                                withMotion(Motion.spring) { list.save(list.enabled + [option.value]) }
                             }
                             .transition(.scale(scale: 0.5).combined(with: .opacity))
                         }
                     }
-                    .padding(.trailing, Space.insetMd)
+                    .padding(.trailing, Spacing.xl)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, Space.insetMd)
-        .frame(height: 48)
-        .overlay(alignment: .top) { NL.borderSubtle.frame(height: 1) }
+        .padding(.horizontal, Spacing.xl)
+        .frame(height: PreviewStyle.trayHeight)
+        .overlay(alignment: .top) { Divider() }
         .animation(Motion.spring, value: list.available.map(\.value))
     }
 }
@@ -147,20 +159,20 @@ private struct TrayChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: Space.s1_5) {
+            HStack(spacing: Spacing.sm) {
                 Image(systemName: option.symbol ?? "circle")
                     .font(.system(size: 11, weight: .semibold))
                 Text(option.title)
-                    .nlType(.labelSm)
+                    .font(.callout)
                     .fixedSize()
                 Image(systemName: "plus")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(hover ? NL.accent : NL.iconTertiary)
+                    .foregroundStyle(hover ? Palette.accent : Color.secondary)
             }
-            .foregroundStyle(NL.textPrimary)
-            .padding(.horizontal, Space.s2 + 2)
-            .frame(height: 28)
-            .background(hover ? NL.active : NL.subtle, in: Capsule())
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, Spacing.md)
+            .frame(height: PreviewStyle.trayChipHeight)
+            .background(hover ? Palette.keyCapBackground : Palette.keyCapBackground.opacity(0.6), in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -185,10 +197,10 @@ private struct MenuBar: View {
             Image(systemName: "battery.75percent").font(.system(size: 14))
             Capsule().frame(width: 52, height: 6).opacity(0.75)
         }
-        .foregroundStyle(.white.opacity(0.9))
+        .foregroundStyle(PreviewStyle.menuBarText)
         .padding(.horizontal, 16)
         .frame(height: height)
-        .background(.black.opacity(0.18))
+        .background(PreviewStyle.menuBarTint)
     }
 }
 
@@ -209,13 +221,14 @@ private struct EdgeHandle: View {
 
     var body: some View {
         Capsule()
-            .fill(.white)
-            .overlay { Capsule().strokeBorder(NL.accent, lineWidth: 1.5) }
-            .frame(width: axis == .horizontal ? 8 : 28, height: axis == .horizontal ? 28 : 8)
+            .fill(PreviewStyle.handleFill)
+            .overlay { Capsule().strokeBorder(Palette.accent, lineWidth: PreviewStyle.handleStroke) }
+            .frame(width: axis == .horizontal ? PreviewStyle.edgeHandleShort : PreviewStyle.edgeHandleLong,
+                   height: axis == .horizontal ? PreviewStyle.edgeHandleLong : PreviewStyle.edgeHandleShort)
             .scaleEffect(hover || start != nil ? 1.2 : 1)
-            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+            .shadow(color: PreviewStyle.handleShadow, radius: 3, y: 1)
             // Попасть легко: зона захвата больше самой пилюли.
-            .padding(8)
+            .padding(PreviewStyle.handleHitPadding)
             .contentShape(Rectangle())
             .onHover { inside in
                 hover = inside
@@ -243,8 +256,8 @@ private struct SizeBadge: View {
             .monospacedDigit()
             .foregroundStyle(.white)
             .padding(.horizontal, 7)
-            .frame(height: 20)
-            .background(NL.accent, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .frame(height: PreviewStyle.badgeHeight)
+            .background(Palette.accent, in: RoundedRectangle(cornerRadius: PreviewStyle.badgeRadius, style: .continuous))
             .contentTransition(.numericText())
     }
 }
@@ -264,17 +277,17 @@ private struct IslandPreviewStage: View {
         let notch = IslandPreview.notch
         let side = max(model.number(app, "sideWidth"), 40)
         let extra = max(model.number(app, "extraHeight"), 0)
-        let openSize = CGSize(width: max(model.number(app, "openWidth"), notch.width + side * 2),
-                              height: max(model.number(app, "openHeight"), notch.height + 80))
-        let peek = CGSize(width: notch.width + side * 2, height: notch.height + extra)
-        let size = open ? openSize : peek
-        let corner = model.number(app, open ? "openCorner" : "peekCorner")
+        // Раскрытый остров подстраивается под вкладку (до 580 pt), поэтому ручки есть только у свёрнутого.
+        let widest = IslandPreview.largestOpenWidth
+        let size = CGSize(width: notch.width + side * 2, height: notch.height + extra)
+        let corner = model.number(app, "peekCorner")
 
         Stage(list: list,
-              hint: "Тяни за края острова. Вкладки перетаскиваются, вниз - убрать. В свёрнутом нажми на ухо.") {
+              hint: open ? "Вкладки перетаскиваются, вниз - убрать. Размер подстраивается под вкладку сам."
+                         : "Тяни за края острова. Нажми на ухо, чтобы выбрать, что в нём показывать.") {
             GeometryReader { proxy in
                 // Превью в натуральную величину; уменьшается, только если раскрытый остров шире сцены.
-                let scale = min(1, (proxy.size.width - 48) / (openSize.width + 28))
+                let scale = min(1, (proxy.size.width - 48) / (widest + 28))
                 ZStack(alignment: .top) {
                     MenuBar(height: notch.height)
                     IslandPreview(settings: model.settingsData(app), open: open, onTabsChange: { tabs in
@@ -282,7 +295,7 @@ private struct IslandPreviewStage: View {
                     }, onEdit: { key, value in
                         withMotion(Motion.spring) { model.set(app, key, value) }
                     })
-                    if hovering || dragging {
+                    if (hovering || dragging), !open {
                         handles(size: size, corner: corner, scale: scale)
                             .transition(.opacity)
                     }
@@ -292,15 +305,17 @@ private struct IslandPreviewStage: View {
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             }
         } corner: {
-            Segmented(selection: Binding(get: { open }, set: { value in withAnimation(Motion.spring) { open = value } }),
-                      options: [(value: false, title: "Свёрнут"), (value: true, title: "Раскрыт")])
+            Picker("Состояние острова", selection: Binding(get: { open }, set: { value in withMotion(Motion.spring) { open = value } })) {
+                Text("Свёрнут").tag(false)
+                Text("Раскрыт").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
         }
-        .onHover { inside in withAnimation(Motion.base) { hovering = inside } }
-        // Двигаешь размеры свёрнутого острова - превью сворачивается, раскрытого - раскрывается.
-        .onChange(of: [side, extra, model.number(app, "peekCorner")]) { if !dragging { open = false } }
-        .onChange(of: [openSize.width, openSize.height, model.number(app, "openCorner"), model.number(app, "earRadius")]) {
-            if !dragging { open = true }
-        }
+        .onHover { inside in withMotion(Motion.base) { hovering = inside } }
+        // Двигаешь размеры свёрнутого острова - превью сворачивается.
+        .onChange(of: [side, extra, corner]) { if !dragging { open = false } }
     }
 
     /// Рамка выделения вокруг острова и ручки на ней: бока - ширина (симметрично), низ - высота, угол - скругление.
@@ -309,65 +324,27 @@ private struct IslandPreviewStage: View {
         let app = schema.app
         ZStack {
             Rectangle()
-                .strokeBorder(NL.accent, lineWidth: 1)
+                .strokeBorder(Palette.accent, lineWidth: 1)
                 .frame(width: size.width, height: size.height)
                 .allowsHitTesting(false)
             ForEach([-1.0, 1.0], id: \.self) { direction in
                 EdgeHandle(axis: .horizontal, cursor: .resizeLeftRight, onDrag: { start, delta in
-                    // Остров растёт в обе стороны от чёлки, поэтому сдвиг края на 1 pt - это 2 pt ширины (и 1 pt уха).
-                    let change = Double(delta / scale) * direction
-                    model.setNumber(app, open ? "openWidth" : "sideWidth", start + (open ? change * 2 : change))
-                }, value: { model.number(app, open ? "openWidth" : "sideWidth") }, active: $dragging,
-                           onBegin: { model.focusKey = open ? "openWidth" : "sideWidth" })
+                    // Сдвиг края на 1 pt - это 1 pt с каждой стороны от чёлки.
+                    model.setNumber(app, "sideWidth", start + Double(delta / scale) * direction)
+                }, value: { model.number(app, "sideWidth") }, active: $dragging,
+                           onBegin: { model.focusKey = "sideWidth" })
                     .offset(x: direction * size.width / 2)
             }
             EdgeHandle(axis: .vertical, cursor: .resizeUpDown, onDrag: { start, delta in
-                model.setNumber(app, open ? "openHeight" : "extraHeight", start + Double(delta / scale))
-            }, value: { model.number(app, open ? "openHeight" : "extraHeight") }, active: $dragging,
-                       onBegin: { model.focusKey = open ? "openHeight" : "extraHeight" })
+                model.setNumber(app, "extraHeight", start + Double(delta / scale))
+            }, value: { model.number(app, "extraHeight") }, active: $dragging,
+                       onBegin: { model.focusKey = "extraHeight" })
                 .offset(y: size.height / 2)
-            // Скругление: кружок внутри левого нижнего угла, тянется по диагонали, как в Figma.
-            RadiusHandle(radius: corner, active: $dragging) { start, delta in
-                model.setNumber(app, open ? "openCorner" : "peekCorner", start + Double(delta / scale))
-            }
-            .offset(x: -size.width / 2 + max(corner, 8) * 0.7 + 6, y: size.height / 2 - max(corner, 8) * 0.7 - 6)
-            .opacity(open ? 1 : 0)
-            .allowsHitTesting(open)
             SizeBadge(text: "\(Int(size.width)) × \(Int(size.height))")
                 .offset(y: size.height / 2 + 24)
         }
         .frame(width: size.width, height: size.height)
         .animation(dragging ? nil : Motion.spring, value: size)
-    }
-}
-
-/// Ручка скругления: кружок, который тянут по диагонали внутрь фигуры.
-private struct RadiusHandle: View {
-    let radius: Double
-    @Binding var active: Bool
-    let onDrag: (_ start: Double, _ delta: CGFloat) -> Void
-    @State private var start: Double?
-    @State private var hover = false
-
-    var body: some View {
-        Circle()
-            .fill(.white)
-            .overlay { Circle().strokeBorder(NL.accent, lineWidth: 1.5) }
-            .frame(width: 10, height: 10)
-            .scaleEffect(hover || start != nil ? 1.3 : 1)
-            .padding(8)
-            .contentShape(Rectangle())
-            .onHover { hover = $0 }
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                    .onChanged { drag in
-                        if start == nil { start = radius; active = true }
-                        onDrag(start ?? 0, (drag.translation.width - drag.translation.height) / 2 * 1.4)
-                    }
-                    .onEnded { _ in start = nil; active = false }
-            )
-            .help("Скругление: \(Int(radius)) pt")
-            .animation(Motion.fast, value: hover)
     }
 }
 
@@ -377,11 +354,10 @@ private struct SidebarPreviewStage: View {
     let model: HubModel
     let schema: SuiteSchema
     @State private var hovering = false
-    @State private var open = false
     @State private var dragging = false
     @State private var panel = CGSize(width: 46, height: 200)
 
-    private let menuBar: CGFloat = 28
+    private let menuBar = PreviewStyle.menuBarHeight
     /// Высота холста: от неё считается, где стоит панель.
     @State private var height: CGFloat = 460
 
@@ -389,7 +365,7 @@ private struct SidebarPreviewStage: View {
         let app = schema.app
         let list = ListBinding(model: model, schema: schema)
         let mode = model.value(app, "mode")?.string ?? "always"
-        let hidden = mode != "always" && !hovering && !dragging && !open
+        let hidden = mode != "always" && !hovering && !dragging
         let area = height - menuBar
         let position = min(max(model.number(app, "position"), -1), 1)
         let centerY = menuBar + area / 2 + position * max(area - panel.height, 0) / 2
@@ -399,18 +375,18 @@ private struct SidebarPreviewStage: View {
             ZStack(alignment: .topLeading) {
                 MenuBar(height: menuBar)
                 if hidden {
-                    Label(mode == "edge" ? "Наведи курсор, и рейка выедет из-за края" : "Рейка спрятана, полка открывается клавишей",
+                    Label(mode == "edge" ? "Наведи курсор, и рейка выедет из-за края" : "Рейка спрятана, появляется по клавише",
                           systemImage: mode == "edge" ? "cursorarrow.rays" : "keyboard")
-                        .nlType(.labelSm)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .padding(.horizontal, Space.s3)
-                        .frame(height: 28)
-                        .background(.black.opacity(0.35), in: Capsule())
-                        .padding(.leading, Space.s4)
-                        .padding(.top, menuBar + Space.s4)
+                        .font(.callout)
+                        .foregroundStyle(PreviewStyle.hintText)
+                        .padding(.horizontal, Spacing.lg)
+                        .frame(height: PreviewStyle.trayChipHeight)
+                        .background(PreviewStyle.hintBackground, in: Capsule())
+                        .padding(.leading, Spacing.xl)
+                        .padding(.top, menuBar + Spacing.xl)
                         .transition(.opacity)
                 }
-                SidebarPreview(settings: model.settingsData(app), open: open, hidden: hidden,
+                SidebarPreview(settings: model.settingsData(app), hidden: hidden,
                                onWidgetsChange: { list?.save($0) }, onPanelSize: { panel = $0 })
                     .padding(.top, menuBar)
                 if (hovering || dragging), !hidden {
@@ -420,25 +396,21 @@ private struct SidebarPreviewStage: View {
             }
             .onGeometryChange(for: CGFloat.self, of: \.size.height) { height = $0 }
         } corner: {
-            Segmented(selection: Binding(get: { open }, set: { value in withAnimation(Motion.spring) { open = value } }),
-                      options: [(value: false, title: "Рейка"), (value: true, title: "Полка")])
+            EmptyView()
         }
-        .onHover { inside in withAnimation(Motion.spring) { hovering = inside } }
+        .onHover { inside in withMotion(Motion.spring) { hovering = inside } }
         .animation(Motion.spring, value: hidden)
-        // Двигаешь ширину или карточки полки - превью раскрывает полку; рейку - сворачивает.
-        .onChange(of: [model.number(app, "openWidth"), model.number(app, "tileSize")]) { if !dragging { open = true } }
-        .onChange(of: [model.number(app, "railWidth"), model.number(app, "iconSize")]) { if !dragging { open = false } }
     }
 
     /// Рамка вокруг панели, ручка ширины на левом краю и ручка перемещения по высоте.
     @ViewBuilder
     private func handles(centerY: CGFloat, area: CGFloat) -> some View {
         let app = schema.app
-        let key = open ? "openWidth" : "railWidth"
+        let key = "railWidth"
         GeometryReader { proxy in
             let left = proxy.size.width - panel.width
             Rectangle()
-                .strokeBorder(NL.accent, lineWidth: 1)
+                .strokeBorder(Palette.accent, lineWidth: 1)
                 .frame(width: panel.width, height: panel.height)
                 .position(x: left + panel.width / 2, y: centerY)
                 .allowsHitTesting(false)
@@ -468,12 +440,12 @@ private struct MoveHandle: View {
     var body: some View {
         Image(systemName: "arrow.up.and.down")
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(NL.accent)
-            .frame(width: 22, height: 22)
-            .background(.white, in: Circle())
-            .overlay { Circle().strokeBorder(NL.accent, lineWidth: 1.5) }
+            .foregroundStyle(Palette.accent)
+            .frame(width: PreviewStyle.moveHandle, height: PreviewStyle.moveHandle)
+            .background(PreviewStyle.handleFill, in: Circle())
+            .overlay { Circle().strokeBorder(Palette.accent, lineWidth: PreviewStyle.handleStroke) }
             .scaleEffect(hover || start != nil ? 1.15 : 1)
-            .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+            .shadow(color: PreviewStyle.handleShadow, radius: 3, y: 1)
             .padding(6)
             .contentShape(Rectangle())
             .onHover { inside in
