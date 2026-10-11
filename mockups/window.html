@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Hub Settings — окно</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#1c1c1f;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.1);--tx:#f2f2f4;--tx2:#a1a1a8;--tx3:#6c6c74;--acc:#0a84ff}
+*{box-sizing:border-box}body{margin:0;background:#0d0d10;font:13px -apple-system,system-ui,sans-serif;color:var(--tx);display:grid;place-items:center;min-height:100vh;padding:24px}
+.win{width:960px;max-width:100%;height:640px;background:var(--bg);border-radius:12px;border:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px #000a}
+.top{padding:10px 0 10px;text-align:center;border-bottom:1px solid var(--line);position:relative}
+.dots{position:absolute;left:14px;top:14px;display:flex;gap:8px}.dots i{width:12px;height:12px;border-radius:50%;background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
+.search{width:460px;max-width:60%;height:30px;margin:0 auto 10px;background:var(--card);border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;padding:0 12px;color:var(--tx2);gap:8px}.search b{margin-left:auto;color:var(--tx3);font-weight:500;font-size:11px}
+.tabs{display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
+.tab{display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:7px;color:var(--tx2);font-weight:500}.tab.on{background:var(--card);color:var(--tx)}.tab.off{opacity:.55}
+.tile{width:18px;height:18px;border-radius:4.5px;display:inline-block}
+.body{flex:1;display:flex;min-height:0}
+.list{width:230px;border-right:1px solid var(--line);padding:12px 8px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.row{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px}.row.on{background:var(--card)}
+.row .tile{width:20px;height:20px;border-radius:5px}.row span{flex:1}
+.sw{width:30px;height:18px;border-radius:9px;background:#3a3a40;position:relative}.sw.on{background:#30d158}.sw:after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.2s}.sw.on:after{left:14px}
+.form{flex:1;overflow:auto;padding:22px 28px}
+.form-in{max-width:680px;margin:0 auto}
+.hd{display:flex;align-items:center;gap:12px;margin-bottom:18px}.hd .tile{width:44px;height:44px;border-radius:10px}.hd h1{font-size:17px;margin:0}.hd p{margin:2px 0 0;color:var(--tx2)}.hd .sw{margin-left:auto}
+.sec{margin-bottom:18px}.sec h3{margin:0 0 6px 4px;font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px}
+.f{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);gap:12px}.f:last-child{border:0}.f span{flex:1}.f small{color:var(--tx2)}
+.slider{width:160px;height:4px;background:#3a3a40;border-radius:2px;position:relative}.slider i{position:absolute;left:0;top:0;bottom:0;width:55%;background:var(--acc);border-radius:2px}
+.seg{display:flex;background:#2a2a2e;border-radius:7px;padding:2px}.seg b{padding:3px 10px;border-radius:5px;font-weight:500;color:var(--tx2)}.seg b.on{background:#4a4a50;color:var(--tx)}
+.key{background:#2a2a2e;border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-weight:500}
+.geek{padding:10px 14px;color:var(--tx2);display:flex;gap:8px}
+</style></head><body>
+<div class="win">
+ <div class="top"><div class="dots"><i></i><i></i><i></i></div>
+  <div class="search">🔍 Поиск настроек <b>⌘F</b></div>
+  <div class="tabs">
+   <div class="tab"><i class="tile" style="background:#8e8e93"></i>Основные</div>
+   <div class="tab on"><i class="tile" style="background:#0a84ff"></i>Island</div>
+   <div class="tab"><i class="tile" style="background:#30d158"></i>FlowLocal</div>
+   <div class="tab"><i class="tile" style="background:#ff9f0a"></i>Awake</div>
+   <div class="tab"><i class="tile" style="background:#bf5af2"></i>Shelf</div>
+   <div class="tab off"><i class="tile" style="background:#64d2ff;filter:grayscale(1)"></i>Winrate</div>
+  </div></div>
+ <div class="body">
+  <div class="list">
+   <div class="row on"><i class="tile" style="background:#0a84ff"></i><span>Остров</span></div>
+   <div class="row"><i class="tile" style="background:#ff375f"></i><span>Музыка</span><div class="sw on"></div></div>
+   <div class="row"><i class="tile" style="background:#ff9f0a"></i><span>Календарь</span><div class="sw on"></div></div>
+   <div class="row"><i class="tile" style="background:#30d158"></i><span>Буфер</span><div class="sw on"></div></div>
+   <div class="row"><i class="tile" style="background:#bf5af2"></i><span>Claude</span><div class="sw"></div></div>
+   <div class="row"><i class="tile" style="background:#64d2ff"></i><span>Таймер</span><div class="sw on"></div></div>
+  </div>
+  <div class="form"><div class="form-in">
+   <div class="hd"><i class="tile" style="background:#0a84ff"></i><div><h1>Остров</h1><p>Чёлка, которая показывает музыку, календарь и буфер</p></div><div class="sw on"></div></div>
+   <div class="sec"><h3>Поведение</h3><div class="card">
+    <div class="f"><span>Раскрывать при наведении</span><div class="sw on"></div></div>
+    <div class="f"><span>Задержка раскрытия</span><small>0,35 с</small><div class="slider"><i></i></div></div>
+    <div class="f"><span>Сворачивать через</span><small>0,4 с</small><div class="slider"><i style="width:35%"></i></div></div>
+    <div class="f"><span>Положение</span><div class="seg"><b class="on">Под чёлкой</b><b>Сверху</b></div></div>
+   </div></div>
+   <div class="sec"><h3>Горячие клавиши</h3><div class="card">
+    <div class="f"><span>Раскрыть остров</span><span class="key" style="flex:0">⌥ Space</span></div>
+   </div></div>
+   <div class="sec"><div class="card"><div class="geek">▸ Для задротов</div></div></div>
+  </div></div>
+ </div>
+</div></body></html>

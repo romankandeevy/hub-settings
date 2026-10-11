@@ -239,6 +239,9 @@ enum ModuleCatalog {
                 PageSpec("mode", "Узкий режим и экран", symbol: "rectangle.compress.vertical", tint: TileColor.gray,
                          subtitle: "Какой экран и узкий вид острова",
                          sections: [
+                             .init(title: "Раскрытие",
+                                   footer: "Остров всегда свёрнутый: только то, что видно в покое.",
+                                   keys: ["neverOpens"]),
                              .init(title: "Экран",
                                    footer: "На мониторе без выреза остров рисует свою «чёлку».",
                                    keys: ["display"]),
