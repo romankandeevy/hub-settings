@@ -17,7 +17,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/HubSettings"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-codesign --force --sign - "$APP"
+# Подпись постоянным локальным сертификатом, если он есть: с ad-hoc подписью macOS после каждой
+# пересборки забывает выданные доступы (Рабочий стол, камера, микрофон) и молча их не даёт.
+SIGN_ID="-"
+security find-identity -v -p codesigning 2>/dev/null | grep -q "Local Dev Signing" && SIGN_ID="Local Dev Signing"
+codesign --force --sign "$SIGN_ID" "$APP"
 echo "==> готово: $APP"
 
 case "${1:-}" in

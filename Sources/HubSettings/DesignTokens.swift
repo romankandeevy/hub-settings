@@ -9,16 +9,28 @@ import SwiftUI
 
 enum WindowMetrics {
     /// Размер при первом запуске; дальше окно помнит свой.
-    static let defaultSize = CGSize(width: 900, height: 700)
-    static let minSize = CGSize(width: 760, height: 520)
+    static let defaultSize = CGSize(width: 960, height: 680)
+    static let minSize = CGSize(width: 760, height: 480)
     static let frameAutosaveName = "HubSettingsWindow"
+}
 
-    static let sidebarMin: CGFloat = 200
-    static let sidebarIdeal: CGFloat = 240
-    static let sidebarMax: CGFloat = 280
-    /// Колонка настроек не растягивается на всю ширину большого окна, как в Системных настройках.
-    static let detailMin: CGFloat = 500
-    static let detailMaxContent: CGFloat = 680
+/// Верх окна: поиск и вкладки приложений.
+enum TopBarMetrics {
+    /// Под кнопками окна: заголовок скрыт, поиск стоит на его месте.
+    static let top: CGFloat = 10
+    static let trafficLightsInset: CGFloat = 80
+    static let searchWidth: CGFloat = 460
+    static let searchHeight: CGFloat = 30
+    static let searchRadius: CGFloat = 8
+    static let tabHeight: CGFloat = 28
+    static let tabRadius: CGFloat = 7
+}
+
+/// Экран приложения: список страниц слева и форма справа.
+enum ScreenMetrics {
+    static let listWidth: CGFloat = 230
+    /// Форма не растягивается на всю ширину большого окна.
+    static let formMaxWidth: CGFloat = 680
 }
 
 // MARK: - значок модуля
@@ -31,12 +43,14 @@ enum TileMetrics {
         let symbol: CGFloat
     }
 
+    /// Во вкладке приложения сверху.
+    static let tab = Size(side: 18, radius: 4.5, symbol: 10)
     /// В боковом списке.
     static let sidebar = Size(side: 20, radius: 5, symbol: 11)
     /// В результатах поиска и в списке модулей на экране «Основные».
     static let row = Size(side: 22, radius: 5.5, symbol: 12)
     /// В шапке экрана модуля.
-    static let header = Size(side: 52, radius: 12, symbol: 26)
+    static let header = Size(side: 44, radius: 10, symbol: 22)
     /// Шапка подстраницы - чуть скромнее шапки модуля.
     static let pageHeader = Size(side: 36, radius: 8.5, symbol: 18)
 }
@@ -71,6 +85,9 @@ enum TileColor {
 
 /// Только системный шрифт в системных стилях: размер следует настройкам macOS.
 enum TextStyle {
+    static let tab = Font.callout.weight(.medium)
+    static let shortcut = Font.caption.weight(.medium)
+    static let childTitle = Font.body.weight(.medium)
     static let headerTitle = Font.title2.weight(.semibold)
     static let headerSummary = Font.callout
     static let pageTitle = Font.title3.weight(.semibold)
@@ -81,6 +98,8 @@ enum TextStyle {
     static let footer = Font.subheadline
     static let value = Font.body.monospacedDigit()
     static let keyCap = Font.body.weight(.medium)
+    static let back = Font.callout
+    static let pageTile = Font.body
     static let emptyTitle = Font.title3.weight(.semibold)
     static let emptyMessage = Font.callout
 }
@@ -125,6 +144,11 @@ enum ControlMetrics {
     /// Высота живого превью в первой секции модуля.
     static let previewHeight: CGFloat = 340
     static let previewRadius: CGFloat = 8
+    /// Превью в шапке экрана.
+    static let heroRadius: CGFloat = 12
+    /// Плитки разделов в сетке.
+    static let pageTileMin: CGFloat = 180
+    static let pageTileHeight: CGFloat = 40
 }
 
 // MARK: - цвета
@@ -132,6 +156,11 @@ enum ControlMetrics {
 /// Только системные цвета: подписи, разделители, фоны контролов и акцент, выбранный в Системных настройках.
 enum Palette {
     static let accent = Color.accentColor
+    static let windowBackground = Color(nsColor: .windowBackgroundColor)
+    static let listBackground = Color.primary.opacity(0.025)
+    static let fieldFill = Color.primary.opacity(0.06)
+    static let hairline = Color.primary.opacity(0.08)
+    static let tabSelected = Color.primary.opacity(0.09)
     static let tileSymbol = Color.white
     static let separator = Color(nsColor: .separatorColor)
     static let controlBackground = Color(nsColor: .controlBackgroundColor)
@@ -140,6 +169,10 @@ enum Palette {
     static let highlight = Color.accentColor.opacity(0.18)
     /// Строка-ссылка на подстраницу под курсором и нажатая.
     static let rowHover = Color.primary.opacity(0.05)
+    static let tileFill = Color.primary.opacity(0.05)
+    static let tileHover = Color.primary.opacity(0.1)
+    static let running = Color(nsColor: .systemGreen)
+    static let stopped = Color.primary.opacity(0.2)
     static let rowPressed = Color.primary.opacity(0.1)
     static let dragShadow = Color.black.opacity(0.2)
     /// Тонкая обводка плитки, чтобы светлые цвета не терялись на светлом фоне.
@@ -187,29 +220,81 @@ func withMotion<Result>(_ animation: Animation = Motion.base, _ body: () throws 
     try withAnimation(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : animation, body)
 }
 
-// MARK: - живое превью
+// MARK: - чёрное стекло
 
-/// Превью - это «экран Mac» с обоями и строкой меню; его цвета не зависят от темы окна.
-enum PreviewStyle {
-    static let wallpaperTop = Color(red: 0.05, green: 0.10, blue: 0.32)
-    static let wallpaperBottom = Color(red: 0.22, green: 0.10, blue: 0.42)
-    static let glowA = Color(nsColor: .systemBlue).opacity(0.75)
-    static let glowB = Color(nsColor: .systemPink).opacity(0.55)
-    static let glowC = Color(nsColor: .systemTeal).opacity(0.45)
-    static let menuBarTint = Color.black.opacity(0.18)
-    static let menuBarText = Color.white.opacity(0.9)
-    static let hintText = Color.white.opacity(0.85)
-    static let hintBackground = Color.black.opacity(0.35)
-    static let handleFill = Color.white
-    static let handleShadow = Color.black.opacity(0.35)
-    static let handleStroke: CGFloat = 1.5
-    static let handleHitPadding: CGFloat = 8
-    static let edgeHandleLong: CGFloat = 28
-    static let edgeHandleShort: CGFloat = 8
-    static let moveHandle: CGFloat = 22
-    static let badgeHeight: CGFloat = 20
-    static let badgeRadius: CGFloat = 5
-    static let trayHeight: CGFloat = 44
-    static let trayChipHeight: CGFloat = 26
-    static let menuBarHeight: CGFloat = 28
+/// Окно всегда тёмное, как сам остров: размытие рабочего стола под глубоким чёрным, белый текст,
+/// никаких системных синих - переключатели и выделение белые и серые.
+enum Glass {
+    static let tint = Color.black.opacity(0.62)
+    static let card = Color.white.opacity(0.045)
+    static let cardStroke = Color.white.opacity(0.07)
+    static let tile = Color.white.opacity(0.09)
+    static let tileStroke = Color.white.opacity(0.1)
+    static let selected = Color.white.opacity(0.11)
+    static let hover = Color.white.opacity(0.05)
+    static let switchOn = Color.white
+    static let switchOff = Color.white.opacity(0.16)
+    static let knobOn = Color.black
+    static let knobOff = Color.white.opacity(0.85)
+    /// Ползунки, выбор и прочие системные контролы - серым.
+    static let controlTint = Color(white: 0.72)
+}
+
+/// Подложка окна: размытие того, что под окном, и чёрный поверх.
+struct GlassBackground: NSViewRepresentable {
+    func makeNSView(context _: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.appearance = NSAppearance(named: .darkAqua)
+        return view
+    }
+
+    func updateNSView(_: NSVisualEffectView, context _: Context) {}
+}
+
+/// Переключатель в духе острова: включён - белая дорожка с чёрной ручкой, выключен - едва заметная.
+struct GlassSwitch: ToggleStyle {
+    @Environment(\.controlSize) private var size
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.switchOnly) private var switchOnly
+
+    func makeBody(configuration: Configuration) -> some View {
+        let height: CGFloat = switch size {
+        case .mini: 14
+        case .small: 18
+        default: 22
+        }
+        let width = height * 1.75
+        return HStack {
+            if !switchOnly {
+                configuration.label
+                Spacer(minLength: Spacing.md)
+            }
+            Capsule()
+                .fill(configuration.isOn ? Glass.switchOn : Glass.switchOff)
+                .frame(width: width, height: height)
+                .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                    Circle()
+                        .fill(configuration.isOn ? Glass.knobOn : Glass.knobOff)
+                        .padding(2)
+                        .frame(width: height, height: height)
+                }
+                .opacity(enabled ? 1 : 0.4)
+                .contentShape(Capsule())
+                .onTapGesture { withMotion(Motion.spring) { configuration.isOn.toggle() } }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityValue(configuration.isOn ? "Вкл." : "Выкл.")
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// Только сам переключатель, без подписи (`labelsHidden` своему стилю не виден на macOS 14).
+    @Entry var switchOnly = false
+}
+
+extension View {
+    func switchOnly() -> some View { environment(\.switchOnly, true).labelsHidden() }
 }

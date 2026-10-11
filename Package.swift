@@ -8,18 +8,11 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(path: "../SuiteKit"),
-        // Живые превью - это настоящие интерфейсы острова и панели, а не их рисунки.
-        .package(path: "../island"),
-        .package(path: "../sidebar"),
     ],
     targets: [
         .executableTarget(
             name: "HubSettings",
-            dependencies: [
-                "SuiteKit",
-                .product(name: "IslandUI", package: "island"),
-                .product(name: "SidebarUI", package: "sidebar"),
-            ]
+            dependencies: ["SuiteKit"]
         ),
     ]
 )

@@ -19,7 +19,7 @@ struct FieldRow: View {
                 get: { model.value(app, field.key)?.bool ?? false },
                 set: { on in withMotion { model.set(app, field.key, .bool(on)) } }
             )) { label }
-            .toggleStyle(.switch)
+            .toggleStyle(GlassSwitch())
             .controlSize(ControlMetrics.switchSize)
         case .number:
             LabeledContent {
@@ -291,7 +291,7 @@ private struct OrderedList: View {
                     .frame(width: ControlMetrics.listSymbolWidth)
             }
             Toggle(option.title, isOn: Binding(get: { on }, set: { _ in toggle() }))
-                .toggleStyle(.switch)
+                .toggleStyle(GlassSwitch())
                 .controlSize(ControlMetrics.switchSize)
                 .foregroundStyle(on ? .primary : .secondary)
         }
@@ -383,8 +383,10 @@ private struct HotKeyRecorder: View {
             let names = KeyNames.modifiers(event.modifierFlags)
             MainActor.assumeIsolated {
                 if code == kVK_Escape { stop(); return }
-                guard names.contains(where: { $0 != "shift" }) else { NSSound.beep(); return }
-                save(code, names)
+                // F1-F20 можно и без модификатора: «none» - признак клавиши без ⌃⌥⌘.
+                let bare = names.isEmpty && KeyNames.functionKeys.contains(code)
+                guard bare || names.contains(where: { $0 != "shift" }) else { NSSound.beep(); return }
+                save(code, bare ? ["none"] : names)
                 stop()
             }
             return nil

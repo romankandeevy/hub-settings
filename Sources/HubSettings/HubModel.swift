@@ -84,6 +84,7 @@ final class HubModel {
             stores[schema.app] = store
             ingest(schema.app, store.value)
         }
+        for schema in fresh { pinFixed(schema) }
         for item in external {
             let app = item.schema.app
             if let store = stores[app] as? DefaultsStore {
@@ -95,6 +96,21 @@ final class HubModel {
             stores[app] = store
             ingest(app, store.value)
         }
+    }
+
+    /// Настройки, убранные из окна (`ModuleStyle.fixed`), всегда равны значению по умолчанию из схемы:
+    /// если в файле осталось другое, возвращаем его. Лишние ключи в файле не трогаем. Не шаг отмены.
+    private func pinFixed(_ schema: SuiteSchema) {
+        guard let store = stores[schema.app] else { return }
+        let stale = ModuleCatalog.style(for: schema.app).fixed.filter { key in
+            guard let standard = schema.defaults[key], let current = SettingsPath.get(store.value, key) else { return false }
+            return current != standard
+        }
+        guard !stale.isEmpty else { return }
+        store.update { file in
+            for key in stale { SettingsPath.set(&file, key, schema.defaults[key]) }
+        }
+        ingest(schema.app, store.value)
     }
 
     /// Новый файл настроек приложения: меняются только ячейки, чьё значение стало другим.

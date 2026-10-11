@@ -42,7 +42,7 @@ enum ModuleExtras {
                         Text("~/Library/Logs/FlowLocal.log")
                     }
                 },
-            ])),
+            ], collapsed: true)),
             Extra(after: nil, section: SettingsSection(
                 id: "flow.permissions",
                 title: "Разрешения",

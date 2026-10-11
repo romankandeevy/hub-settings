@@ -28,11 +28,6 @@ struct SchemaModule: SettingsModule {
         )
     }
 
-    var preview: AnyView? {
-        guard AppPreview.exists(for: schema) else { return nil }
-        return AnyView(AppPreview(model: model, schema: schema))
-    }
-
     var sections: [SettingsSection] { layout.sections }
     var pageGroups: [PageGroup] { layout.pages }
 
@@ -92,8 +87,14 @@ struct ModuleStyle {
     var pages: [PageSpec.Group] = []
     /// Не показывать: служебное или то, что и так переключается прямо в приложении.
     var hidden: Set<String> = []
-    /// Технические настройки: в свёрнутой секции «Тонкая настройка» внизу своей страницы.
+    /// Технические настройки: в свёрнутой секции «Для задротов» внизу своей страницы.
     var advanced: Set<String> = []
+    /// Убраны из настроек: поведение всегда как по умолчанию в схеме. Хаб их не показывает
+    /// и возвращает к значению по умолчанию, если в файле осталось другое (`HubModel.pinFixed`).
+    var fixed: Set<String> = []
+
+    /// Не показывать в окне и в поиске.
+    func isHidden(_ key: String) -> Bool { hidden.contains(key) || fixed.contains(key) }
 
     struct SectionLayout {
         let title: String
@@ -141,7 +142,8 @@ enum ModuleCatalog {
         case "island": island
         case "sidebar": sidebar
         case "shelf": shelf
-        case "flow": ModuleStyle(tint: TileColor.purple, title: "Flow", symbol: "waveform")
+        case "flow": flow
+        case "horizon": horizon
         case "awake": ModuleStyle(tint: TileColor.yellow, symbol: "cup.and.saucer.fill")
         default: ModuleStyle()
         }
@@ -157,7 +159,7 @@ enum ModuleCatalog {
             .init(title: "По бокам от чёлки",
                   footer: "Что видно слева и справа от чёлки, когда остров свёрнут и ничего не происходит.",
                   keys: ["idleLeft", "idleRight", "shelfInEars", "shelfEar", "lowBattery", "earFontSize", "rotationInterval"]),
-            .init(title: "Поведение", keys: ["hoverDelay", "hideDelay", "haptics", "animationSpeed"]),
+            .init(title: "Поведение", keys: ["openOnFileDrag", "hoverDelay", "hideDelay", "haptics", "animationSpeed"]),
         ],
         copy: [
             "tabs": FieldCopy("Вкладки"),
@@ -218,7 +220,6 @@ enum ModuleCatalog {
             "moduleOptions.gestures.horizontalEnabled": FieldCopy("Свайп вбок над музыкой"),
             "moduleOptions.lockScreen.opacity": FieldCopy("Непрозрачность", value: .percent),
             "moduleOptions.statsWindow.opacity": FieldCopy("Непрозрачность", value: .percent),
-            "moduleOptions.privacy.priority": FieldCopy("Важность"),
             "moduleOptions.awake.enabled": FieldCopy("Значок у чёлки, пока Mac не спит"),
         ],
         pages: [
@@ -265,8 +266,7 @@ enum ModuleCatalog {
                                       power: .key("moduleOptions.musicLikes.enabled")),
                          ]),
                 PageSpec("shelf", "Полка", symbol: "tray.full.fill", tint: TileColor.orange,
-                         subtitle: "Файлы, снимки, конвертация", tab: "shelf",
-                         sections: [.init(title: "Перетаскивание", keys: ["openOnFileDrag"])]),
+                         subtitle: "Файлы, снимки, конвертация", tab: "shelf"),
                 PageSpec("clipboard", "Буфер обмена", symbol: "doc.on.clipboard.fill", tint: TileColor.blue,
                          subtitle: "История скопированного", tab: "clipboard"),
                 PageSpec("timer", "Таймер", symbol: "timer", tint: TileColor.orange,
@@ -331,45 +331,115 @@ enum ModuleCatalog {
             "moduleOptions.claude.period", "moduleOptions.mirror.camera",
         ],
         advanced: [
+            // Общее.
             "earFontSize", "rotationInterval", "animationSpeed",
-            "glassBlur", "glassTintAmount", "glassFade", "glassBottomShade",
+            "glassTint", "glassBlur", "glassTintAmount", "glassFade", "glassBottomShade",
             "sideWidth", "extraHeight", "peekCorner", "earRadius", "tabHeight", "tabSpacing", "tabCorner", "tabIconSize",
-            "minimalWidth",
-            "moduleOptions.sound.step", "moduleOptions.sound.showSystem", "moduleOptions.sound.showIcons",
-            "moduleOptions.shelf.enhanceScale", "moduleOptions.shelf.sharpen", "moduleOptions.shelf.denoise",
-            "moduleOptions.shelf.vectorColors", "moduleOptions.shelf.vectorDetail", "moduleOptions.shelf.vectorSmooth",
-            "moduleOptions.shelf.gifFPS", "moduleOptions.shelf.gifWidth", "moduleOptions.shelf.compressQuality",
-            "moduleOptions.shelf.keepPinned",
-            "moduleOptions.clipboard.ignoreApps", "moduleOptions.clipboard.imageMaxSide",
-            "moduleOptions.clipboard.maxTextLength", "moduleOptions.clipboard.keepPinnedOnClear",
-            "moduleOptions.timer.maxTimers", "moduleOptions.timer.defaultColor", "moduleOptions.timer.countBadge",
-            "moduleOptions.notes.createIfMissing", "moduleOptions.notes.interval", "moduleOptions.notes.conflict",
-            "moduleOptions.monitor.interval", "moduleOptions.monitor.topCount",
-            "moduleOptions.claude.geminiDailyLimit", "moduleOptions.claude.fetchPrices", "moduleOptions.claude.refreshMinutes",
-            "moduleOptions.terminal.shell", "moduleOptions.terminal.login", "moduleOptions.terminal.closeOnHide",
-            "moduleOptions.terminal.foreground", "moduleOptions.terminal.background", "moduleOptions.terminal.cursor",
-            "moduleOptions.terminal.scrollback", "moduleOptions.terminal.optionAsMeta",
-            "moduleOptions.assistant.maxSide", "moduleOptions.assistant.maxLength", "moduleOptions.assistant.timeout",
-            "moduleOptions.assistant.claudePath",
-            "moduleOptions.sneakPeek.onResume", "moduleOptions.sneakPeek.onFirstTrack",
-            "moduleOptions.sneakPeek.width", "moduleOptions.sneakPeek.fontSize",
+            "minimalWidth", "minimalTabs",
+            // Музыка.
+            "moduleOptions.sneakPeek.place", "moduleOptions.sneakPeek.showArtwork",
+            "moduleOptions.sneakPeek.onlyWhenHidden", "moduleOptions.sneakPeek.animated",
+            "moduleOptions.sneakPeek.onResume", "moduleOptions.sneakPeek.width", "moduleOptions.sneakPeek.fontSize",
+            "moduleOptions.lyrics.pinAnimated",
             "moduleOptions.lyrics.sources", "moduleOptions.lyrics.showPlain", "moduleOptions.lyrics.fontSize",
             "moduleOptions.lyrics.context", "moduleOptions.lyrics.pinOnlyPlaying", "moduleOptions.lyrics.offset",
             "moduleOptions.lyrics.pinWidth", "moduleOptions.lyrics.pinFontSize",
-            "moduleOptions.glow.pulseStrength", "moduleOptions.glow.animateColors", "moduleOptions.glow.colorCount",
+            "moduleOptions.visualizer.gradient", "moduleOptions.visualizer.showInEar", "moduleOptions.visualizer.showInTab",
             "moduleOptions.visualizer.source", "moduleOptions.visualizer.appBundleID", "moduleOptions.visualizer.fallbackToAll",
-            "moduleOptions.visualizer.earBars", "moduleOptions.visualizer.tabBars", "moduleOptions.visualizer.fallback",
-            "moduleOptions.musicLikes.spotifyPort",
-            "moduleOptions.gestures.seekSeconds", "moduleOptions.gestures.sensitivity",
-            "moduleOptions.urlControl.suiteBus",
-            "moduleOptions.lockScreen.scale",
-            "moduleOptions.eyedropper.uppercase", "moduleOptions.eyedropper.includeAlpha", "moduleOptions.eyedropper.showPopup",
-            "moduleOptions.eyedropper.closeIsland", "moduleOptions.eyedropper.historySize",
-            "moduleOptions.openFiles.showActivity", "moduleOptions.openFiles.folders",
+            "moduleOptions.visualizer.earBars", "moduleOptions.visualizer.tabBars",
+            "moduleOptions.glow.where", "moduleOptions.glow.size", "moduleOptions.glow.pulse", "moduleOptions.glow.beat",
+            "moduleOptions.glow.pulseStrength", "moduleOptions.glow.colorCount",
+            "moduleOptions.musicLikes.others", "moduleOptions.musicLikes.spotifyPort",
+            // Пятница: на виду только «каждый час», автоплейлист и «только русское».
+            "moduleOptions.friday.topCount", "moduleOptions.friday.showcase", "moduleOptions.friday.genres",
+            "moduleOptions.friday.genreCount", "moduleOptions.friday.artists", "moduleOptions.friday.maxArtists",
+            "moduleOptions.friday.similar", "moduleOptions.friday.editorial", "moduleOptions.friday.premiere",
+            "moduleOptions.friday.presaves",
+            // Звук.
+            "moduleOptions.sound.step", "moduleOptions.sound.showSystem",
+            // Полка.
+            "moduleOptions.shelf.sourceResults", "moduleOptions.shelf.sourceClipboard",
+            "moduleOptions.shelf.sourceScreenshots", "moduleOptions.shelf.sourceRecordings",
+            "moduleOptions.shelf.onlyCaptures", "moduleOptions.shelf.maxAgeDays", "moduleOptions.shelf.thumbSize",
+            "moduleOptions.shelf.sort", "moduleOptions.shelf.showNames", "moduleOptions.shelf.showDates",
+            "moduleOptions.shelf.showSizes", "moduleOptions.shelf.imageFormat", "moduleOptions.shelf.quality",
+            "moduleOptions.shelf.videoSize", "moduleOptions.shelf.trashOriginal",
+            "moduleOptions.shelf.enhanceScale", "moduleOptions.shelf.sharpen", "moduleOptions.shelf.denoise",
+            "moduleOptions.shelf.vectorColors", "moduleOptions.shelf.vectorDetail", "moduleOptions.shelf.vectorSmooth",
+            "moduleOptions.shelf.gifFPS", "moduleOptions.shelf.gifWidth", "moduleOptions.shelf.compressQuality",
+            // Буфер обмена.
+            "moduleOptions.clipboard.ignoreApps", "moduleOptions.clipboard.maxAgeDays",
+            "moduleOptions.clipboard.images", "moduleOptions.clipboard.files",
+            "moduleOptions.clipboard.imageMaxSide", "moduleOptions.clipboard.maxTextLength",
+            // Таймер.
+            "moduleOptions.timer.presets", "moduleOptions.timer.earsMode",
+            "moduleOptions.timer.maxTimers", "moduleOptions.timer.defaultColor", "moduleOptions.timer.countBadge",
+            // Заметка.
+            "moduleOptions.notes.folder", "moduleOptions.notes.direction",
+            "moduleOptions.notes.interval", "moduleOptions.notes.conflict",
+            // Монитор и окно статистики.
+            "moduleOptions.monitor.temperatureUnit", "moduleOptions.monitor.speedUnit",
+            "moduleOptions.monitor.interval", "moduleOptions.monitor.topCount",
+            "moduleOptions.statsWindow.opacity", "moduleOptions.statsWindow.allSpaces",
+            // Лимиты ИИ.
+            "moduleOptions.claude.warnAt", "moduleOptions.claude.criticalAt",
+            "moduleOptions.claude.geminiDailyLimit", "moduleOptions.claude.refreshMinutes",
+            // Терминал.
+            "moduleOptions.terminal.shell", "moduleOptions.terminal.login", "moduleOptions.terminal.closeOnHide",
+            "moduleOptions.terminal.foreground", "moduleOptions.terminal.background", "moduleOptions.terminal.cursor",
+            "moduleOptions.terminal.scrollback", "moduleOptions.terminal.optionAsMeta",
+            // Зеркало.
+            "moduleOptions.mirror.fit", "moduleOptions.mirror.zoom", "moduleOptions.mirror.quality",
+            // Помощник.
+            "moduleOptions.assistant.autoSend", "moduleOptions.assistant.captureOnHotkey",
+            "moduleOptions.assistant.listenOnHotkey",
+            "moduleOptions.assistant.maxSide", "moduleOptions.assistant.maxLength", "moduleOptions.assistant.timeout",
+            "moduleOptions.assistant.claudePath",
+            // События у чёлки.
+            "moduleOptions.downloads.showName", "moduleOptions.downloads.finishedDuration",
             "moduleOptions.downloads.folders", "moduleOptions.downloads.minSize",
-            "moduleOptions.bluetooth.batteryStyle", "moduleOptions.privacy.priority",
-            "moduleOptions.statsWindow.allSpaces", "moduleOptions.focus.showOff", "moduleOptions.awake.showAlways",
+            "moduleOptions.bluetooth.other", "moduleOptions.bluetooth.showName", "moduleOptions.bluetooth.showDisconnect",
+            "moduleOptions.bluetooth.duration", "moduleOptions.bluetooth.lowThreshold", "moduleOptions.bluetooth.batteryStyle",
+            "moduleOptions.screenRecording.showTimer", "moduleOptions.screenRecording.showStop",
+            "moduleOptions.focus.keepWhileOn", "moduleOptions.focus.duration", "moduleOptions.focus.sound",
+            // Управление.
+            "moduleOptions.hotkeys.openTab1On", "moduleOptions.hotkeys.openTab1Key", "moduleOptions.hotkeys.openTab1Tab",
+            "moduleOptions.hotkeys.openTab2On", "moduleOptions.hotkeys.openTab2Key", "moduleOptions.hotkeys.openTab2Tab",
+            "moduleOptions.hotkeys.timerOn", "moduleOptions.hotkeys.timerKey",
+            "moduleOptions.hotkeys.toggleMinimalOn", "moduleOptions.hotkeys.toggleMinimalKey",
+            "moduleOptions.gestures.swipeDownOpens", "moduleOptions.gestures.swipeUpCloses",
+            "moduleOptions.gestures.horizontalWhenClosed",
+            "moduleOptions.gestures.seekSeconds", "moduleOptions.gestures.sensitivity",
+            "moduleOptions.eyedropper.sound",
+            "moduleOptions.eyedropper.uppercase", "moduleOptions.eyedropper.includeAlpha",
+            "moduleOptions.eyedropper.historySize",
+            "moduleOptions.lockScreen.showVolume", "moduleOptions.lockScreen.showDevices",
+            "moduleOptions.lockScreen.opacity", "moduleOptions.lockScreen.unlockAnimation",
+            "moduleOptions.lockScreen.scale",
+        ],
+        fixed: [
+            "moduleOptions.sound.showIcons",
+            "moduleOptions.shelf.keepPinned", "moduleOptions.clipboard.keepPinnedOnClear",
+            "moduleOptions.sneakPeek.onFirstTrack", "moduleOptions.visualizer.fallback",
+            "moduleOptions.glow.animateColors", "moduleOptions.notes.createIfMissing",
+            "moduleOptions.awake.showAlways",
+            "moduleOptions.openFiles.showActivity", "moduleOptions.openFiles.folders",
+            "moduleOptions.privacy.priority", "moduleOptions.focus.showOff", "moduleOptions.claude.fetchPrices",
+            "moduleOptions.eyedropper.closeIsland", "moduleOptions.eyedropper.showPopup",
+            "moduleOptions.urlControl.suiteBus",
         ]
+    )
+
+    private static let flow = ModuleStyle(
+        tint: TileColor.purple, title: "Flow", symbol: "waveform",
+        advanced: [
+            "addSpace", "keepInClipboard",
+            "pillPosition", "pillSize", "pillShowTimer", "pillShowWave",
+            "pillLiveText", "pillTextWidth",
+            "removeRepeats", "capitalize", "customFillers",
+            "saveAudio", "historyDays", "showMenuBarIcon", "showInDock",
+        ],
+        fixed: ["pillShowDot", "pillShowStatus"]
     )
 
     private static let sidebar = ModuleStyle(
@@ -407,6 +477,10 @@ enum ModuleCatalog {
             "limitWarn": FieldCopy("Лимит Claude жёлтый с"),
             "limitDanger": FieldCopy("Лимит Claude красный с"),
             "lowBattery": FieldCopy("Заряд красный ниже"),
+        ],
+        advanced: [
+            "hoverDelay", "hideDelay", "railWidth", "cornerRadius", "earRadius", "railPadding", "widgetSpacing",
+            "iconSize", "ringWidth", "labelSize", "limitWarn", "limitDanger", "lowBattery",
         ]
     )
 
@@ -426,6 +500,14 @@ enum ModuleCatalog {
             "feedDownloads": FieldCopy("Загрузки"),
             "feedClipboard": FieldCopy("Буфер обмена"),
             "feedDays": FieldCopy("Показывать за последние"),
+        ],
+        advanced: ["feedDays", "shakeSensitivity"]
+    )
+
+    private static let horizon = ModuleStyle(
+        advanced: [
+            "sensitivity", "beatStrength", "syncAuto", "syncOffsetMs", "showDebug", "cycleMinutes",
+            "wallpaperBrightness", "wallpaperFPS", "wallpaperQuality",
         ]
     )
 }
@@ -487,7 +569,7 @@ struct SchemaLayout {
 
     func build() -> (sections: [SettingsSection], pages: [PageGroup]) {
         var used = Set<String>()
-        let fields = schema.groups.flatMap(\.fields).filter { !style.hidden.contains($0.key) }
+        let fields = schema.groups.flatMap(\.fields).filter { !style.isHidden($0.key) }
         let byKey = Dictionary(fields.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
 
         // Главная страница: секции из раскладки.
@@ -520,7 +602,7 @@ struct SchemaLayout {
 
         // Всё, что приложение добавило в схему, а раскладка не знает, - на главной, в группах схемы.
         for group in schema.groups where group.fields.first.flatMap({ Self.optionID($0.key) }) == nil {
-            let options = group.fields.filter { !used.contains($0.key) && !style.hidden.contains($0.key) }
+            let options = group.fields.filter { !used.contains($0.key) && !style.isHidden($0.key) }
             let visible = options.filter { !style.advanced.contains($0.key) }.compactMap(option)
             let advanced = options.filter { style.advanced.contains($0.key) }.compactMap(option)
             used.formUnion(options.map(\.key))
@@ -567,7 +649,7 @@ struct SchemaLayout {
         let prefix = Self.commonPrefix(groups)
         var advanced: [SettingsOption] = []
         for group in groups {
-            let fields = group.fields.filter { !used.contains($0.key) && !style.hidden.contains($0.key) }
+            let fields = group.fields.filter { !used.contains($0.key) && !style.isHidden($0.key) }
             used.formUnion(fields.map(\.key))
             advanced += fields.filter { style.advanced.contains($0.key) }.compactMap(option)
             let options = fields.filter { !style.advanced.contains($0.key) }.compactMap(option)
@@ -680,7 +762,7 @@ private struct TabToggle: View {
             Text("Вкладка в острове")
             Text(tabs.contains(tab) ? "Видна среди вкладок раскрытого острова" : "Сейчас скрыта")
         }
-        .toggleStyle(.switch)
+        .toggleStyle(GlassSwitch())
         .controlSize(ControlMetrics.switchSize)
     }
 }

@@ -24,8 +24,6 @@ protocol SettingsModule {
     var group: ModuleGroup { get }
     /// Главный переключатель «Включено» в шапке. nil - у модуля его нет.
     var power: ModulePower? { get }
-    /// Живое превью в первой секции. nil - без превью.
-    var preview: AnyView? { get }
     var sections: [SettingsSection] { get }
     /// Подстраницы: строки со значком и стрелкой под секциями главной страницы, как в Системных настройках.
     /// Большой модуль делится на них, чтобы одна страница не была простынёй из сотен строк.
@@ -39,7 +37,6 @@ protocol SettingsModule {
 extension SettingsModule {
     var group: ModuleGroup { .modules }
     var power: ModulePower? { nil }
-    var preview: AnyView? { nil }
     var pageGroups: [PageGroup] { [] }
     var canReset: Bool { false }
     var reset: (() -> Void)? { nil }
@@ -177,12 +174,21 @@ struct ModuleRegistry {
 
     /// Приложения набора: со схемой - полный экран настроек, без схемы - только «Включено». По названию.
     var appModules: [any SettingsModule] {
-        let schemas: [any SettingsModule] = model.schemas.map { SchemaModule(schema: $0, model: model, apps: apps) }
+        let schemas: [any SettingsModule] = model.schemas.filter { !Self.excluded.contains($0.app) }.map { SchemaModule(schema: $0, model: model, apps: apps) }
         let known = Set(model.schemas.map(\.app))
         let plain: [any SettingsModule] = apps.installed.filter { !known.contains($0.id) }
+            .filter { !Self.excluded.contains($0.id) }
             .map { AppOnlyModule(app: $0, apps: apps) }
-        return (schemas + plain).sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+        func rank(_ module: any SettingsModule) -> Int { Self.order.firstIndex(of: module.id) ?? Self.order.count }
+        return (schemas + plain).sorted {
+            (rank($0), $0.title.localizedLowercase) < (rank($1), $1.title.localizedLowercase)
+        }
     }
+
+    /// Порядок вкладок; остальные - за ними по названию.
+    static let order = ["island", "flow", "shelf", "awake"]
+    /// Есть в наборе, но в хабе не показываются.
+    static let excluded: Set<String> = ["sidebar"]
 
     func module(_ id: String?) -> (any SettingsModule)? {
         let all = modules

@@ -11,7 +11,7 @@ struct GeneralModule: SettingsModule {
 
     var id: String { Self.moduleID }
     var title: String { "Основные" }
-    var summary: String { "Какие модули работают и как выглядит это окно." }
+    var summary: String { "Какие приложения набора работают." }
     var symbol: String { "gearshape.fill" }
     var tint: Color { TileColor.gray }
     var group: ModuleGroup { .hub }
@@ -32,13 +32,6 @@ struct GeneralModule: SettingsModule {
                     }
                 }
             ),
-            SettingsSection(id: "general.window", title: "Окно", options: [
-                SettingsOption(id: "general.sidebarStatus", title: "Отмечать выключенные модули в списке",
-                               keywords: ["статус", "боковой список"]) {
-                    HubPreferenceToggle(title: "Отмечать выключенные модули в списке",
-                                        help: "Рядом с названием появится «Выкл.»")
-                },
-            ]),
             SettingsSection(
                 id: "general.files",
                 title: "Файлы настроек",
@@ -57,34 +50,12 @@ struct GeneralModule: SettingsModule {
         ]
     }
 
-    var canReset: Bool {
-        UserDefaults.standard.object(forKey: HubPreferences.showStatus) != nil
-    }
-
-    var reset: (() -> Void)? {
-        { UserDefaults.standard.removeObject(forKey: HubPreferences.showStatus) }
-    }
 }
 
 /// Настройки самого окна (не приложений набора) - в UserDefaults хаба.
 enum HubPreferences {
-    static let showStatus = "showModuleStatus"
-    static let showStatusDefault = true
-}
-
-private struct HubPreferenceToggle: View {
-    let title: String
-    let help: String
-    @AppStorage(HubPreferences.showStatus) private var value = HubPreferences.showStatusDefault
-
-    var body: some View {
-        Toggle(isOn: $value) {
-            Text(title)
-            Text(help)
-        }
-        .toggleStyle(.switch)
-        .controlSize(ControlMetrics.switchSize)
-    }
+    /// Показывать технические секции («Тонкая настройка»).
+    static let showAdvanced = "showAdvanced"
 }
 
 /// Строка модуля: плитка, название, описание и переключатель «включён».
@@ -105,7 +76,7 @@ private struct ModuleSwitchRow: View {
                 }
             }
         }
-        .toggleStyle(.switch)
+        .toggleStyle(GlassSwitch())
         .controlSize(ControlMetrics.switchSize)
         .disabled(power?.available != true || power?.isBusy == true)
     }

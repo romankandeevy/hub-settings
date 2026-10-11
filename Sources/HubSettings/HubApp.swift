@@ -15,7 +15,7 @@ struct HubApp: App {
                 .background(WindowFrameAutosave(name: WindowMetrics.frameAutosaveName))
         }
         .defaultSize(WindowMetrics.defaultSize)
-        .windowToolbarStyle(.unified)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .undoRedo) {
@@ -42,6 +42,10 @@ private struct WindowFrameAutosave: NSViewRepresentable {
         let view = NSView()
         DispatchQueue.main.async {
             guard let window = view.window else { return }
+            // Чёрное стекло: окно прозрачное, фон рисует размытие под ним.
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.appearance = NSAppearance(named: .darkAqua)
             window.setFrameUsingName(name)
             window.setFrameAutosaveName(name)
         }
